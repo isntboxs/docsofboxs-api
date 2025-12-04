@@ -39,7 +39,11 @@ const getBlogBySlugHandler = factory.createHandlers(
         });
       }
 
-      if (user?.role === UserRole.user && blog.status === BlogStatus.draft) {
+      if (
+        user?.role === UserRole.user &&
+        blog.status === BlogStatus.draft &&
+        blog.author.id !== user.id
+      ) {
         logger.warn({ userId: user.id, blog }, 'User tried to access a draft blog');
 
         throw new HTTPException(HttpStatusCodes.FORBIDDEN, {
