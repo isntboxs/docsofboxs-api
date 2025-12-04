@@ -6,3 +6,98 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum UserRole {
+  admin
+  user
+}
+
+model User {
+  id              String    @id @default(uuid())
+  name            String
+  username        String?
+  email           String
+  image           String?
+  displayUsername String?
+  role            UserRole  @default(user)
+  emailVerified   Boolean   @default(false)
+  banned          Boolean?  @default(false)
+  banReason       String?
+  banExpires      DateTime?
+  isAnonymous     Boolean?  @default(false)
+
+  sessions Session[]
+  accounts Account[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email])
+  @@unique([username])
+  @@map("user")
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  userId         String
+  expiresAt      DateTime
+  token          String
+  ipAddress      String?
+  userAgent      String?
+  impersonatedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Jwks {
+  id         String @id @default(uuid())
+  publicKey  String
+  privateKey String
+
+  createdAt DateTime
+  expiresAt DateTime?
+
+  @@map("jwks")
+}
