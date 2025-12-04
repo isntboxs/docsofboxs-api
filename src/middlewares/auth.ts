@@ -29,7 +29,12 @@ export const requireRole = (allowedRoles: UserRole | UserRole[]) => {
     }
 
     const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
-    const userRole = user.role.split(',') ?? ['user'];
+    const userRole =
+      typeof user.role === 'string'
+        ? user.role.split(',')
+        : Array.isArray(user.role)
+          ? user.role
+          : ['user'];
 
     const hasRole = roles.some((role) => userRole.includes(role));
 
