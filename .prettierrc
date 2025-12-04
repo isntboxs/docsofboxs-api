@@ -1,0 +1,58 @@
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "arrowParens": "always",
+  "bracketSpacing": true,
+  "endOfLine": "lf",
+  "quoteProps": "as-needed",
+  "proseWrap": "preserve",
+  "htmlWhitespaceSensitivity": "css",
+  "embeddedLanguageFormatting": "auto",
+  "bracketSameLine": false,
+  "overrides": [
+    {
+      "files": "*.json",
+      "options": {
+        "printWidth": 80,
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": "*.md",
+      "options": {
+        "proseWrap": "always",
+        "printWidth": 80
+      }
+    },
+    {
+      "files": ["*.yml", "*.yaml"],
+      "options": {
+        "tabWidth": 2,
+        "singleQuote": false
+      }
+    }
+  ],
+  "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+  "importOrder": [
+    "<BUILTIN_MODULES>",
+    "<THIRD_PARTY_MODULES>",
+    "",
+    "^(hono/(.*)$)|^(hono$)|^(@hono/(.*)$)|^(@hono$)",
+    "",
+    "^@/(.*)$",
+    "",
+    "^[./]",
+    "",
+    "<TYPES>",
+    "<TYPES>^(hono$)|^(@hono$)",
+    "<TYPES>^@/(.*)$",
+    "<TYPES>^[./]"
+  ],
+  "importOrderParserPlugins": ["typescript", "jsx", "decorators-legacy"],
+  "importOrderTypeScriptVersion": "5.0.0",
+  "importOrderCaseSensitive": false
+}
