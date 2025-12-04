@@ -10,3 +10,5 @@ export const createBlogSchema = z.object({
   content: z.string().nonempty({ error: 'Content is required' }),
   status: blogStatusSchema.default('draft'),
 });
+
+export const updateBlogSchema = createBlogSchema.partial();
