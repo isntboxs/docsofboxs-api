@@ -31,7 +31,8 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          const adminEmails = env.ADMIN_EMAILS.includes(user.email);
+          const adminEmails =
+            typeof user.email === 'string' && env.ADMIN_EMAILS.includes(user.email.toLowerCase());
 
           if (adminEmails) {
             return {
@@ -60,8 +61,8 @@ export const auth = betterAuth({
   },
   plugins: [
     adminPlugin({
-      adminRoles: ['admin'],
-      defaultRole: 'user',
+      adminRoles: [UserRole.admin],
+      defaultRole: UserRole.user,
     }),
     anonymousPlugin(),
     bearerPlugin(),

@@ -18,7 +18,9 @@ export const env = createEnv({
     ADMIN_EMAILS: z
       .string()
       .default('')
-      .transform((val) => (val === '' ? [] : val.split(','))),
+      .transform((val) =>
+        val === '' ? [] : val.split(',').map((email) => email.trim().toLowerCase())
+      ),
     BETTER_AUTH_SECRET: z.string(),
     BETTER_AUTH_URL: z.url(),
   },
