@@ -12,6 +12,7 @@ import {
 
 import { env } from '@/configs/env';
 
+import { ac, roles } from '@/lib/auth/permission';
 import { prisma } from '@/lib/prisma';
 
 import { UserRole } from '@/generated/prisma/enums';
@@ -63,6 +64,8 @@ export const auth = betterAuth({
     adminPlugin({
       adminRoles: [UserRole.admin],
       defaultRole: UserRole.user,
+      ac,
+      roles,
     }),
     anonymousPlugin(),
     bearerPlugin(),

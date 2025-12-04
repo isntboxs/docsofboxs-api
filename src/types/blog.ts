@@ -1,9 +1,11 @@
+import type { BlogStatus } from '@/generated/prisma/enums';
+
 export interface BlogType {
   id: string;
   title: string;
   slug: string;
   content: string;
-  status: string;
+  status: BlogStatus;
   viewsCount: number;
   likesCount: number;
   commentsCount: number;
