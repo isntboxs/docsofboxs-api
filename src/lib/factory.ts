@@ -1,9 +1,18 @@
 import { createFactory } from 'hono/factory';
 
-const factory = createFactory({
+import { logger } from '@/lib/pino-logger';
+
+import type { AppEnv } from '@/types/app';
+
+export const factory = createFactory<AppEnv>({
   defaultAppOptions: {
     strict: false,
   },
-});
 
-export default factory;
+  initApp: (app) => {
+    app.use(async (c, next) => {
+      c.set('logger', logger);
+      await next();
+    });
+  },
+});
