@@ -57,7 +57,10 @@ const updateBlogHandler = factory.createHandlers(
       if (title && title !== existingBlog.title) {
         updateSlug = await createUniqueSlug(title, async (newSlug) => {
           const duplicateSlug = await prisma.blog.findFirst({
-            where: { slug: newSlug },
+            where: {
+              slug: newSlug,
+              id: { not: existingBlog.id },
+            },
           });
 
           return !!duplicateSlug;
