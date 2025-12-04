@@ -1,5 +1,3 @@
-import * as z from 'zod';
-
 import { zValidator } from '@hono/zod-validator';
 
 import * as HttpStatusCodes from '@/constants/http-status-codes';
@@ -7,33 +5,20 @@ import * as HttpStatusCodes from '@/constants/http-status-codes';
 import { auth } from '@/lib/auth';
 import { factory } from '@/lib/factory';
 
-import type { BlogStatus } from '@/generated/prisma/enums';
-import type { ApiSuccessResponse } from '@/types/api-response';
+import { blogsPaginationSchema } from '@/schemas/pagination.schema';
+
+import { BlogStatus } from '@/generated/prisma/enums';
+
+import type { Prisma } from '@/generated/prisma/client';
+import type { PaginatedResponse } from '@/types/api-response';
 import type { BlogType } from '@/types/blog';
 
-// Query params schema for pagination
-const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(10),
-});
-
-export interface PaginatedBlogsResponse {
-  blogs: BlogType[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalCount: number;
-    limit: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
-}
-
 const getAllBlogsHandler = factory.createHandlers(
-  zValidator('query', paginationSchema),
+  zValidator('query', blogsPaginationSchema),
   async (c) => {
     try {
       const { page, limit } = c.req.valid('query');
+      const offset = (page - 1) * limit;
 
       const user = c.get('user');
       const prisma = c.get('prisma');
@@ -56,50 +41,32 @@ const getAllBlogsHandler = factory.createHandlers(
       }
 
       // Build status filter based on permissions
-      const statusFilter: BlogStatus[] = canReadDraft
-        ? ['published', 'draft'] // Admin can see both
-        : ['published']; // Regular users/unauthenticated only see published
+      const whereClause: Prisma.BlogWhereInput = {
+        status: {
+          in: canReadDraft ? [BlogStatus.published, BlogStatus.draft] : [BlogStatus.published],
+        },
+      };
 
       logger.info(
-        { userId: user?.id, canReadDraft, statusFilter },
+        { userId: user?.id, canReadDraft, whereClause },
         'Fetching blogs with permission-based filtering'
       );
 
-      // Calculate pagination offset
-      const skip = (page - 1) * limit;
+      const [totalCount, blogs] = await Promise.all([
+        prisma.blog.count({ where: whereClause }),
 
-      // Get total count for pagination
-      const totalCount = await prisma.blog.count({
-        where: {
-          status: {
-            in: statusFilter,
+        prisma.blog.findMany({
+          where: whereClause,
+          include: {
+            author: true,
           },
-        },
-      });
-
-      // Fetch paginated blogs
-      const blogs = await prisma.blog.findMany({
-        where: {
-          status: {
-            in: statusFilter,
+          orderBy: {
+            createdAt: 'desc',
           },
-        },
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              username: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        skip,
-        take: limit,
-      });
+          skip: offset,
+          take: limit,
+        }),
+      ]);
 
       // Transform to match BlogType interface
       const transformedBlogs: BlogType[] = blogs.map((blog) => ({
@@ -121,25 +88,18 @@ const getAllBlogsHandler = factory.createHandlers(
         updatedAt: blog.updatedAt,
       }));
 
-      const totalPages = Math.ceil(totalCount / limit);
-
-      const response: PaginatedBlogsResponse = {
-        blogs: transformedBlogs,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalCount,
-          limit,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1,
-        },
-      };
-
-      return c.json<ApiSuccessResponse<PaginatedBlogsResponse>>(
+      return c.json<PaginatedResponse<BlogType[]>>(
         {
           success: true,
           message: 'Blogs fetched successfully',
-          data: response,
+          data: transformedBlogs,
+          pagination: {
+            limit,
+            offset,
+            page,
+            totalPages: Math.ceil(totalCount / limit),
+            totalItems: totalCount,
+          },
         },
         HttpStatusCodes.OK
       );
