@@ -5,9 +5,12 @@ import { HTTPException } from 'hono/http-exception';
 
 import * as HttpStatusCodes from '@/constants/http-status-codes';
 
+import { auth } from '@/lib/auth';
 import { factory } from '@/lib/factory';
 
 import { requireAuth, requireRole } from '@/middlewares/auth';
+
+import { UserRole } from '@/generated/prisma/enums';
 
 import type { ApiSuccessResponse } from '@/types/api-response';
 
@@ -33,11 +36,21 @@ const deleteBlogByIdHandler = factory.createHandlers(
         });
       }
 
-      if (existingBlog.authorId !== user.id) {
+      const hasDeletePermission = await auth.api.userHasPermission({
+        body: {
+          userId: user.id,
+          permission: {
+            blogs: ['delete'],
+          },
+        },
+      });
+
+      if (user.role === UserRole.user && !hasDeletePermission.success) {
         logger.warn(
           { userId: user.id, existingBlog },
           'A user tried to delete a blog without permissions'
         );
+
         throw new HTTPException(HttpStatusCodes.FORBIDDEN, {
           message: 'Access denied, insufficient permissions',
         });
