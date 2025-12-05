@@ -1,4 +1,5 @@
 import createBlogHandler from '@/handlers/blogs/create-blog.handler';
+import deleteBlogByIdHandler from '@/handlers/blogs/delete-blog-by-id.handler';
 import getAllBlogsHandler from '@/handlers/blogs/get-all-blogs.handler';
 import getBlogBySlugHandler from '@/handlers/blogs/get-blog-by-slug.handler';
 import getBlogsByUserHandler from '@/handlers/blogs/get-blogs-by-user.handler';
@@ -24,6 +25,6 @@ blogsRoute.post('/', ...createBlogHandler);
 blogsRoute.put('/:slug', ...updateBlogHandler);
 
 // delete blog (private, required admin role)
-// blogsRoute.delete('/:slug', ...deleteBlogHandler);
+blogsRoute.delete('/:blogId', ...deleteBlogByIdHandler);
 
 export default blogsRoute;
