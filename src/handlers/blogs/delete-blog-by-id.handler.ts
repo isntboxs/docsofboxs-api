@@ -36,24 +36,26 @@ const deleteBlogByIdHandler = factory.createHandlers(
         });
       }
 
-      const hasDeletePermission = await auth.api.userHasPermission({
-        body: {
-          userId: user.id,
-          permission: {
-            blogs: ['delete'],
+      if (user.role === UserRole.user) {
+        const hasDeletePermission = await auth.api.userHasPermission({
+          body: {
+            userId: user.id,
+            permission: {
+              blogs: ['delete'],
+            },
           },
-        },
-      });
-
-      if (user.role === UserRole.user && !hasDeletePermission.success) {
-        logger.warn(
-          { userId: user.id, existingBlog },
-          'A user tried to delete a blog without permissions'
-        );
-
-        throw new HTTPException(HttpStatusCodes.FORBIDDEN, {
-          message: 'Access denied, insufficient permissions',
         });
+
+        if (!hasDeletePermission.success) {
+          logger.warn(
+            { userId: user.id, existingBlog },
+            'A user tried to delete a blog without permissions'
+          );
+
+          throw new HTTPException(HttpStatusCodes.FORBIDDEN, {
+            message: 'Access denied, insufficient permissions',
+          });
+        }
       }
 
       await prisma.blog.delete({
