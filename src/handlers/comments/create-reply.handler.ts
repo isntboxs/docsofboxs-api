@@ -38,26 +38,26 @@ const createReplyHandler = factory.createHandlers(
     const logger = c.get('logger');
 
     try {
-      // Fetch the parent comment to get its depth and blogId
-      const parentComment = await prisma.comment.findUnique({
-        where: { id: commentId },
-        select: { id: true, depth: true, blogId: true },
-      });
-
-      if (!parentComment) {
-        throw new HTTPException(HttpStatusCodes.NOT_FOUND, {
-          message: 'Parent comment not found',
-        });
-      }
-
-      // Check if max depth is exceeded
-      if (parentComment.depth >= MAX_DEPTH) {
-        throw new HTTPException(HttpStatusCodes.BAD_REQUEST, {
-          message: `Comments cannot be nested more than ${MAX_DEPTH} levels deep`,
-        });
-      }
-
       const newReply = await prisma.$transaction(async (tx) => {
+        // Fetch the parent comment to get its depth and blogId
+        const parentComment = await prisma.comment.findUnique({
+          where: { id: commentId },
+          select: { id: true, depth: true, blogId: true },
+        });
+
+        if (!parentComment) {
+          throw new HTTPException(HttpStatusCodes.NOT_FOUND, {
+            message: 'Parent comment not found',
+          });
+        }
+
+        // Check if max depth is exceeded
+        if (parentComment.depth >= MAX_DEPTH) {
+          throw new HTTPException(HttpStatusCodes.BAD_REQUEST, {
+            message: `Comments cannot be nested more than ${MAX_DEPTH} levels deep`,
+          });
+        }
+
         const reply = await tx.comment.create({
           data: {
             content,
@@ -83,7 +83,7 @@ const createReplyHandler = factory.createHandlers(
         return reply;
       });
 
-      logger.info({ newReply }, 'Reply created successfully');
+      logger.info({ replyId: newReply.id, blogId: newReply.blogId }, 'Reply created successfully');
 
       const transformedComment: Comment = {
         id: newReply.id,

@@ -36,18 +36,18 @@ const createCommentBlogHandler = factory.createHandlers(
     const logger = c.get('logger');
 
     try {
-      const blog = await prisma.blog.findUnique({
-        where: { id: blogId },
-        select: { id: true, title: true },
-      });
-
-      if (!blog) {
-        throw new HTTPException(HttpStatusCodes.NOT_FOUND, {
-          message: 'Blog not found',
-        });
-      }
-
       const newComment = await prisma.$transaction(async (tx) => {
+        const blog = await prisma.blog.findUnique({
+          where: { id: blogId },
+          select: { id: true, title: true },
+        });
+
+        if (!blog) {
+          throw new HTTPException(HttpStatusCodes.NOT_FOUND, {
+            message: 'Blog not found',
+          });
+        }
+
         const comment = await tx.comment.create({
           data: {
             content,
@@ -71,7 +71,10 @@ const createCommentBlogHandler = factory.createHandlers(
         return comment;
       });
 
-      logger.info({ newComment }, 'Comment created successfully');
+      logger.info(
+        { commentId: newComment.id, blogId, authorId: newComment.authorId },
+        'Comment created successfully'
+      );
 
       const transformedComment: Comment = {
         id: newComment.id,
