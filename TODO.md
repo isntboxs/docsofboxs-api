@@ -592,3 +592,286 @@ export const createCommentSchema = z.object({
 // src/middlewares/verify-comment-exists.ts
 export const verifyCommentExists = factory.createMiddleware(...)
 ```
+
+---
+
+## 🛣️ API Routes/Endpoints Best Practices Review (NEW)
+
+### Current Endpoint Structure
+
+| Resource | Current Endpoint                  | Method | Issue                           |
+| -------- | --------------------------------- | ------ | ------------------------------- |
+| Blogs    | `GET /api/blogs/:slug`            | GET    | Uses `:slug`                    |
+| Blogs    | `PUT /api/blogs/:slug`            | PUT    | Uses `:slug`                    |
+| Blogs    | `DELETE /api/blogs/:blogId`       | DELETE | Uses `:blogId` ❌ Inconsistent! |
+| Blogs    | `GET /api/blogs/user/:userId`     | GET    | Non-standard nesting            |
+| Likes    | `POST /api/likes/blog/:blogId`    | POST   | Separate resource, not nested   |
+| Likes    | `DELETE /api/likes/blog/:blogId`  | DELETE | Separate resource, not nested   |
+| Comments | `GET /api/comments/blog/:blogId`  | GET    | Separate resource, not nested   |
+| Comments | `POST /api/comments/blog/:blogId` | POST   | Separate resource, not nested   |
+
+---
+
+### REST API Best Practices
+
+#### 1. **Use Nouns, Not Verbs** ✅ (Already followed)
+
+```
+✅ GET /api/blogs (not /api/getBlogs)
+✅ POST /api/blogs (not /api/createBlog)
+```
+
+#### 2. **Resource Nesting for Relationships**
+
+Resources that belong to a parent should be nested:
+
+```
+Current:  POST /api/likes/blog/:blogId
+Better:   POST /api/blogs/:blogId/likes
+
+Current:  GET /api/comments/blog/:blogId
+Better:   GET /api/blogs/:blogId/comments
+```
+
+#### 3. **Consistent Identifiers**
+
+Use the same identifier type across all CRUD operations:
+
+```
+Current:  GET /api/blogs/:slug     (uses slug)
+          PUT /api/blogs/:slug     (uses slug)
+          DELETE /api/blogs/:blogId (uses id) ❌
+
+Better:   GET /api/blogs/:slug     (keep slug for public)
+          GET /api/blogs/id/:blogId (add explicit id route if needed)
+          PUT /api/blogs/:slug or PUT /api/blogs/:id
+          DELETE /api/blogs/:slug or DELETE /api/blogs/:id
+```
+
+#### 4. **Plural Resource Names** ✅ (Already followed)
+
+```
+✅ /api/blogs (not /api/blog)
+✅ /api/comments (not /api/comment)
+```
+
+#### 5. **Filter via Query Parameters**
+
+```
+Current:  GET /api/blogs/user/:userId
+Better:   GET /api/blogs?authorId=:userId
+          GET /api/users/:userId/blogs (nested resource)
+```
+
+#### 6. **HTTP Methods for Actions**
+
+For non-CRUD actions, use sub-resources or POST:
+
+```
+Current:  POST /api/likes/blog/:blogId (creates a like)
+          DELETE /api/likes/blog/:blogId (removes a like)
+
+Alternative (Toggle Pattern):
+          POST /api/blogs/:blogId/like (toggle or explicit action)
+```
+
+---
+
+### Recommended Endpoint Structure
+
+| Resource                          | Recommended Endpoint                    | Method | Description               |
+| --------------------------------- | --------------------------------------- | ------ | ------------------------- |
+| **Blogs**                         |
+|                                   | `GET /api/blogs`                        | GET    | List all blogs            |
+|                                   | `GET /api/blogs/:slug`                  | GET    | Get blog by slug          |
+|                                   | `POST /api/blogs`                       | POST   | Create blog               |
+|                                   | `PUT /api/blogs/:slug`                  | PUT    | Update blog by slug       |
+|                                   | `DELETE /api/blogs/:slug`               | DELETE | Delete blog by slug       |
+|                                   | `GET /api/users/:userId/blogs`          | GET    | Get blogs by user         |
+| **Likes** (nested under blogs)    |
+|                                   | `POST /api/blogs/:blogId/likes`         | POST   | Like a blog               |
+|                                   | `DELETE /api/blogs/:blogId/likes`       | DELETE | Unlike a blog             |
+|                                   | `GET /api/blogs/:blogId/likes/count`    | GET    | Get like count (optional) |
+| **Comments** (nested under blogs) |
+|                                   | `GET /api/blogs/:blogId/comments`       | GET    | Get comments for blog     |
+|                                   | `POST /api/blogs/:blogId/comments`      | POST   | Create comment            |
+|                                   | `GET /api/comments/:commentId`          | GET    | Get single comment        |
+|                                   | `PUT /api/comments/:commentId`          | PUT    | Update comment            |
+|                                   | `DELETE /api/comments/:commentId`       | DELETE | Delete comment            |
+|                                   | `GET /api/comments/:commentId/replies`  | GET    | Get replies               |
+|                                   | `POST /api/comments/:commentId/replies` | POST   | Create reply              |
+
+---
+
+## 🔧 Route Refactoring Tasks
+
+### [ ] REFACTOR-010: Consistent Blog Identifier
+
+**File:** `src/routes/blogs.route.ts`  
+**Issue:** Delete uses `:blogId` while GET/PUT use `:slug`
+
+**Current:**
+
+```typescript
+blogsRoute.get('/:slug', ...getBlogBySlugHandler);
+blogsRoute.put('/:slug', ...updateBlogHandler);
+blogsRoute.delete('/:blogId', ...deleteBlogByIdHandler); // Inconsistent!
+```
+
+**Fix Option A (Use slug everywhere):**
+
+```typescript
+blogsRoute.delete('/:slug', ...deleteBlogBySlugHandler);
+```
+
+**Fix Option B (Add explicit id routes):**
+
+```typescript
+blogsRoute.delete('/id/:blogId', ...deleteBlogByIdHandler);
+```
+
+---
+
+### [ ] REFACTOR-011: Nest Likes Under Blogs
+
+**Files:** `src/routes/likes.route.ts`, `src/routes/blogs.route.ts`  
+**Issue:** Likes are separate resource but belong to blogs.
+
+**Current:**
+
+```typescript
+// likes.route.ts
+likesRoute.post('/blog/:blogId', ...likeBlogHandler);
+likesRoute.delete('/blog/:blogId', ...unlikeBlogHandler);
+```
+
+**Fix:** Move to blogs route:
+
+```typescript
+// blogs.route.ts
+blogsRoute.post('/:blogId/likes', ...likeBlogHandler);
+blogsRoute.delete('/:blogId/likes', ...unlikeBlogHandler);
+```
+
+---
+
+### [ ] REFACTOR-012: Nest Comments Under Blogs
+
+**Files:** `src/routes/comments.route.ts`, `src/routes/blogs.route.ts`  
+**Issue:** Blog-related comment endpoints should be nested.
+
+**Current:**
+
+```typescript
+commentsRoute.get('/blog/:blogId', ...getCommentsBlogHandler);
+commentsRoute.post('/blog/:blogId', ...createCommentBlogHandler);
+```
+
+**Fix:**
+
+```typescript
+// blogs.route.ts (for blog-scoped operations)
+blogsRoute.get('/:blogId/comments', ...getCommentsBlogHandler);
+blogsRoute.post('/:blogId/comments', ...createCommentBlogHandler);
+
+// comments.route.ts (for comment-specific operations)
+commentsRoute.get('/:commentId', ...getCommentHandler);
+commentsRoute.put('/:commentId', ...updateCommentHandler);
+commentsRoute.delete('/:commentId', ...deleteCommentHandler);
+commentsRoute.get('/:commentId/replies', ...getRepliesHandler);
+commentsRoute.post('/:commentId/replies', ...createReplyHandler);
+```
+
+---
+
+### [ ] REFACTOR-013: Use Query Params for User Blogs Filter
+
+**File:** `src/routes/blogs.route.ts`  
+**Issue:** `/user/:userId` is non-standard for filtering.
+
+**Current:**
+
+```typescript
+blogsRoute.get('/user/:userId', ...getBlogsByUserHandler);
+```
+
+**Fix Option A (Query Parameter):**
+
+```typescript
+// GET /api/blogs?authorId=xxx
+blogsRoute.get('/', ...getAllBlogsHandler); // Handler checks query.authorId
+```
+
+**Fix Option B (Users Resource):**
+
+```typescript
+// GET /api/users/:userId/blogs
+// Add to a new users.route.ts
+usersRoute.get('/:userId/blogs', ...getBlogsByUserHandler);
+```
+
+---
+
+### [ ] REFACTOR-014: Rename Reply Endpoint for Consistency
+
+**File:** `src/routes/comments.route.ts`  
+**Issue:** Uses `/reply` (singular) instead of `/replies` (plural).
+
+**Current:**
+
+```typescript
+commentsRoute.post('/:commentId/reply', ...createReplyHandler);
+```
+
+**Fix:**
+
+```typescript
+commentsRoute.post('/:commentId/replies', ...createReplyHandler);
+```
+
+---
+
+### [ ] REFACTOR-015: Add API Versioning
+
+**File:** `src/routes/index.ts`  
+**Issue:** No API versioning for future compatibility.
+
+**Current:**
+
+```typescript
+const base = app.basePath('/api');
+```
+
+**Fix:**
+
+```typescript
+const v1 = app.basePath('/api/v1');
+
+v1.route('/', rootRoute);
+v1.route('/auth', authRoute);
+v1.route('/blogs', blogsRoute);
+// etc.
+```
+
+---
+
+### [ ] REFACTOR-016: Create Users Route
+
+**Issue:** User-related endpoints are scattered.
+
+**Fix:** Create `src/routes/users.route.ts`:
+
+```typescript
+const usersRoute = factory.createApp();
+
+// Get user's blogs
+usersRoute.get('/:userId/blogs', ...getBlogsByUserHandler);
+
+// Get user's liked blogs (future)
+usersRoute.get('/:userId/likes', ...getLikedBlogsHandler);
+
+// Get user's comments (future)
+usersRoute.get('/:userId/comments', ...getUserCommentsHandler);
+
+export default usersRoute;
+```
