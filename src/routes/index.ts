@@ -1,5 +1,6 @@
 import authRoute from '@/routes/auth.route';
 import blogsRoute from '@/routes/blogs.route';
+import commentsRoute from '@/routes/comments.route';
 import likesRoute from '@/routes/likes.route';
 import rootRoute from '@/routes/root.route';
 
@@ -14,4 +15,5 @@ export function registerRoutes(app: Hono<AppEnv, any, any>) {
   base.route('/auth', authRoute);
   base.route('/blogs', blogsRoute);
   base.route('/likes', likesRoute);
+  base.route('/comments', commentsRoute);
 }

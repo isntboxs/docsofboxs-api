@@ -30,6 +30,7 @@ model User {
   accounts Account[]
   blogs    Blog[]
   likes    Like[]
+  comments Comment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

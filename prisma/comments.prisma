@@ -1,0 +1,20 @@
+model Comment {
+  id       String  @id @default(uuid())
+  authorId String
+  blogId   String
+  content  String
+  parentId String? // null = top-level comment
+  depth    Int     @default(0) // 0 = top-level, 1 = reply, 2 = reply-to-reply, etc.
+
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  blog    Blog      @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@index([blogId])
+  @@map("comments")
+}
