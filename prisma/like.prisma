@@ -3,8 +3,8 @@ model Like {
   userId String
   blogId String
 
-  user User @relation(fields: [userId], references: [id])
-  blog Blog @relation(fields: [blogId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
