@@ -50,6 +50,7 @@ const getRepliesCommentHandler = factory.createHandlers(
           where: { parentId: commentId },
           take: limit,
           skip: offset,
+          orderBy: { createdAt: 'desc' },
           include: {
             author: true,
             replies: {

@@ -50,6 +50,7 @@ const getCommentsBlogHandler = factory.createHandlers(
           where: { blogId, parentId: null },
           take: limit,
           skip: offset,
+          orderBy: { createdAt: 'desc' },
           include: {
             author: true,
             replies: {
