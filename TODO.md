@@ -338,3 +338,257 @@ export interface LikeResponse {
   likeCount: number;
 }
 ```
+
+---
+
+## 🆕 Comments Feature (NEW)
+
+### Feature Overview
+
+| Method   | Endpoint                           | Auth | Role       | Description               |
+| -------- | ---------------------------------- | ---- | ---------- | ------------------------- |
+| `GET`    | `/api/comments/blog/:blogId`       | ✅   | user/admin | Get comments for a blog   |
+| `GET`    | `/api/comments/:commentId/replies` | ✅   | user/admin | Get replies for a comment |
+| `POST`   | `/api/comments/blog/:blogId`       | ✅   | user/admin | Create a comment          |
+| `POST`   | `/api/comments/:commentId/reply`   | ✅   | user/admin | Create a reply            |
+| `DELETE` | `/api/comments/:commentId`         | ✅   | user/admin | Delete a comment          |
+
+### Prisma Model
+
+```prisma
+model Comment {
+  id       String  @id @default(uuid())
+  authorId String
+  blogId   String
+  content  String
+  parentId String? // null = top-level comment
+  depth    Int     @default(0) // 0 = top-level, 1 = reply, etc.
+  // Self-referential relation for nested replies
+  parent  Comment?  @relation("CommentReplies", ...)
+  replies Comment[] @relation("CommentReplies")
+  @@unique([userId, blogId])
+}
+```
+
+**Features:**
+
+- Nested comments with depth tracking (max depth: 5)
+- Cascade delete for replies when parent is deleted
+- `commentsCount` sync on Blog model
+
+---
+
+## 🔴 Critical Bug Fixes (Comments Feature)
+
+### [ ] BUG-010: Transaction Uses Wrong Prisma Client
+
+**File:** `src/handlers/comments/create-comment-blog.handler.ts`  
+**Lines 39-43:**
+
+```typescript
+const newComment = await prisma.$transaction(async (tx) => {
+  const blog = await prisma.blog.findUnique({  // WRONG! Uses outer `prisma`
+    where: { id: blogId },
+  });
+```
+
+**Issue:** Inside the transaction callback, the code uses `prisma` instead of
+`tx`, which defeats the purpose of the transaction (the blog lookup happens
+outside the transaction).
+
+**Fix:**
+
+```diff
+const newComment = await prisma.$transaction(async (tx) => {
+-  const blog = await prisma.blog.findUnique({
++  const blog = await tx.blog.findUnique({
+    where: { id: blogId },
+  });
+```
+
+---
+
+### [ ] BUG-011: Delete Handler Only Counts Direct Replies
+
+**File:** `src/handlers/comments/delete-comment-blog.handler.ts`  
+**Lines 51-55:**
+
+```typescript
+const repliesCount = await tx.comment.count({
+  where: {
+    OR: [{ id: commentId }, { parentId: commentId }], // Only counts 1 level!
+  },
+});
+```
+
+**Issue:** This query only counts the comment itself and its direct children
+(depth=1), but NOT deeply nested replies (depth=2+). If a comment has nested
+replies beyond depth 1, `commentsCount` will become incorrect.
+
+**Fix:** Use recursive query or count all descendants:
+
+```typescript
+// Option A: Count all descendants recursively
+async function countAllDescendants(tx, commentId) {
+  const directReplies = await tx.comment.findMany({
+    where: { parentId: commentId },
+    select: { id: true },
+  });
+  let count = 1; // Include the current comment
+  for (const reply of directReplies) {
+    count += await countAllDescendants(tx, reply.id);
+  }
+  return count;
+}
+
+// Option B: Since onDelete: Cascade will delete all replies,
+// count ALL comments in the cascade chain before delete
+```
+
+---
+
+## 🟡 Medium Bug Fixes (Comments Feature)
+
+### [ ] BUG-012: Transaction Uses Wrong Client in create-reply.handler
+
+**File:** `src/handlers/comments/create-reply.handler.ts`  
+**Lines 42-46:**
+
+```typescript
+const newReply = await prisma.$transaction(async (tx) => {
+  const parentComment = await prisma.comment.findUnique({  // WRONG!
+    where: { id: commentId },
+  });
+```
+
+**Issue:** Same as BUG-010 - uses outer `prisma` instead of `tx`.
+
+**Fix:** Change `prisma.comment.findUnique` to `tx.comment.findUnique`
+
+---
+
+### [ ] BUG-013: Potential Negative commentsCount
+
+**Files:** `delete-comment-blog.handler.ts`  
+**Issue:** Similar to likesCount, if `commentsCount` is 0 due to data
+inconsistency, decrementing will result in negative values.
+
+**Fix:** Add check or use Math.max:
+
+```typescript
+await tx.blog.update({
+  where: { id: comment.blogId },
+  data: {
+    commentsCount: {
+      decrement: Math.min(repliesCount, blog.commentsCount),
+    },
+  },
+});
+```
+
+---
+
+### [ ] BUG-014: Get Replies Handler Returns Wrong Message
+
+**File:** `src/handlers/comments/get-replies-comment.handler.ts`  
+**Line 103:**
+
+```typescript
+message: 'Comments retrieved successfully',  // Should say "Replies"
+```
+
+**Fix:** Change to `'Replies retrieved successfully'`
+
+---
+
+### [ ] BUG-015: No Update Comment Handler
+
+**Files:** Comments handlers  
+**Issue:** There's no endpoint to update/edit an existing comment. Users cannot
+correct typos or modify their comments.
+
+**Fix:** Create `src/handlers/comments/update-comment.handler.ts` and add route:
+
+```typescript
+// PUT /api/comments/:commentId
+commentsRoute.put('/:commentId', ...updateCommentHandler);
+```
+
+---
+
+## 🟢 Minor Issues (Comments Feature)
+
+### [ ] ISSUE-007: No Content Length Validation for Comments
+
+**Files:** `create-comment-blog.handler.ts`, `create-reply.handler.ts`  
+**Issue:** Comment content has no max length validation, allowing extremely long
+comments.
+
+**Fix:** Add max length to validation:
+
+```typescript
+content: z.string()
+  .nonempty({ error: 'Content is required' })
+  .max(5000, { error: 'Comment is too long' }),
+```
+
+---
+
+### [ ] ISSUE-008: MAX_DEPTH Constant Not Centralized
+
+**File:** `src/handlers/comments/create-reply.handler.ts`  
+**Line 15:**
+
+```typescript
+const MAX_DEPTH = 5; // Hardcoded locally
+```
+
+**Fix:** Move to `src/constants/index.ts`:
+
+```typescript
+export const COMMENT_MAX_DEPTH = 5;
+```
+
+---
+
+## 🔧 Refactoring Tasks (Comments Feature)
+
+### [ ] REFACTOR-007: Extract Comment Transformation Utility
+
+**Files:** All 4 comment handlers with transformation logic  
+**Issue:** Duplicate `transformedComment` mapping in multiple handlers.
+
+**Fix:** Create `src/utils/comment-transformers.ts`:
+
+```typescript
+export function transformComment(comment: PrismaComment): Comment { ... }
+export function transformComments(comments: PrismaComment[]): Comment[] { ... }
+```
+
+---
+
+### [ ] REFACTOR-008: Create Comment Validation Schema
+
+**Files:** `create-comment-blog.handler.ts`, `create-reply.handler.ts`  
+**Issue:** Inline Zod schemas are duplicated.
+
+**Fix:** Add to `src/schemas/comment.schema.ts`:
+
+```typescript
+export const createCommentSchema = z.object({
+  content: z.string().nonempty().max(5000),
+});
+```
+
+---
+
+### [ ] REFACTOR-009: Extract Comment Existence Middleware
+
+**Files:** Multiple handlers check comment/blog existence.
+
+**Fix:** Create reusable middlewares:
+
+```typescript
+// src/middlewares/verify-comment-exists.ts
+export const verifyCommentExists = factory.createMiddleware(...)
+```
