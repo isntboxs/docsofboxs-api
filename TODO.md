@@ -163,3 +163,178 @@ export interface ApiErrorResponse {
 
 - Code style guidelines
 - PR process
+
+---
+
+## 🆕 Like/Unlike Feature (NEW)
+
+### Feature Overview
+
+| Method   | Endpoint                  | Auth | Role       | Description   |
+| -------- | ------------------------- | ---- | ---------- | ------------- |
+| `POST`   | `/api/likes/blog/:blogId` | ✅   | user/admin | Like a blog   |
+| `DELETE` | `/api/likes/blog/:blogId` | ✅   | user/admin | Unlike a blog |
+
+### Prisma Model
+
+```prisma
+model Like {
+  id     String @id @default(cuid())
+  userId String
+  blogId String
+  user User @relation(...)
+  blog Blog @relation(...)
+  @@unique([userId, blogId])
+}
+```
+
+---
+
+## 🔴 Critical Bug Fixes (Like/Unlike Feature)
+
+### [ ] BUG-006: Incorrect Comment in Unlike Handler
+
+**File:** `src/handlers/likes/unlike-blog.handler.ts`  
+**Lines 59-61:**
+
+```typescript
+// Step 3: Use transaction to atomically create like and increment likesCount  // WRONG!
+const [unlike, updatedBlog] = await prisma.$transaction([
+  // Create the like record  // WRONG! It's a DELETE
+  prisma.like.delete({...
+```
+
+**Fix:** Update comments to say "delete like and decrement likesCount"
+
+---
+
+### [ ] BUG-007: Unlike Handler Comment Says "Increment" but Code Decrements
+
+**File:** `src/handlers/likes/unlike-blog.handler.ts`  
+**Line 87:**
+
+```typescript
+// Increment the likesCount on the blog  // WRONG! It decrements
+prisma.blog.update({
+  data: { likesCount: { decrement: 1 } },  // Correctly decrements
+```
+
+**Fix:** Change comment to "Decrement the likesCount on the blog"
+
+---
+
+## 🟡 Medium Bug Fixes (Like/Unlike Feature)
+
+### [ ] BUG-008: Potential Negative likesCount
+
+**File:** `src/handlers/likes/unlike-blog.handler.ts`  
+**Issue:** If `likesCount` is already 0 (due to data inconsistency),
+decrementing will result in -1.
+
+**Fix Option A:** Add check before decrementing:
+
+```typescript
+const blog = await prisma.blog.findUnique({ where: { id: blogId } });
+if (blog.likesCount <= 0) {
+  // Just delete the like, don't decrement
+}
+```
+
+**Fix Option B:** Use Prisma's `Math.max` or raw SQL to ensure non-negative:
+
+```typescript
+likesCount: {
+  decrement: blog.likesCount > 0 ? 1 : 0;
+}
+```
+
+---
+
+### [ ] BUG-009: Unlike Uses Wrong HTTP Status for "Not Liked"
+
+**File:** `src/handlers/likes/unlike-blog.handler.ts`  
+**Line 54:**
+
+```typescript
+throw new HTTPException(HttpStatusCodes.CONFLICT, {
+  message: 'You have not liked this blog',
+});
+```
+
+**Issue:** `CONFLICT (409)` is for request conflicts. For "resource not found"
+(user hasn't liked), `NOT_FOUND (404)` or `BAD_REQUEST (400)` is more
+appropriate.
+
+**Fix:**
+
+```diff
+- throw new HTTPException(HttpStatusCodes.CONFLICT, {
++ throw new HTTPException(HttpStatusCodes.NOT_FOUND, {
+    message: 'You have not liked this blog',
+  });
+```
+
+---
+
+## 🟢 Minor Issues (Like/Unlike Feature)
+
+### [ ] ISSUE-005: Unused Include Data in Transaction
+
+**Files:** Both like and unlike handlers  
+**Issue:** The `include` clause fetches blog/user data but it's not used in the
+response.
+
+```typescript
+prisma.like.create({
+  data: {...},
+  include: {
+    blog: { select: {...} },  // Not used
+    user: { select: {...} },  // Not used
+  },
+});
+```
+
+**Fix:** Remove unused `include` to improve performance.
+
+---
+
+### [ ] ISSUE-006: No Rate Limiting on Like/Unlike
+
+**Issue:** Users could spam like/unlike requests rapidly.
+
+**Suggestion:** Add rate limiting middleware for `/api/likes/*` routes.
+
+---
+
+## 🔧 Refactoring Tasks (Like/Unlike Feature)
+
+### [ ] REFACTOR-005: Extract Common Blog Existence Check
+
+**Files:** `like-blog.handler.ts`, `unlike-blog.handler.ts`  
+**Issue:** Both handlers have duplicate blog existence verification.
+
+**Fix:** Create shared middleware or utility:
+
+```typescript
+// src/middlewares/verify-blog-exists.ts
+export const verifyBlogExists = factory.createMiddleware(async (c, next) => {
+  const blogId = c.req.param('blogId');
+  const blog = await c.get('prisma').blog.findUnique({...});
+  if (!blog) throw new HTTPException(NOT_FOUND, {...});
+  c.set('blog', blog);
+  await next();
+});
+```
+
+---
+
+### [ ] REFACTOR-006: Create LikeType Response Interface
+
+**Create:** `src/types/like.ts`  
+**Benefit:** Type consistency for like responses
+
+```typescript
+export interface LikeResponse {
+  likeCount: number;
+}
+```
