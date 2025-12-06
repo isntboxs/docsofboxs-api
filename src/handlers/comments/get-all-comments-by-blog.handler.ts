@@ -35,7 +35,6 @@ const getCommentsBlogHandler = factory.createHandlers(
     try {
       const blog = await prisma.blog.findUnique({
         where: { id: blogId },
-        select: { id: true, title: true },
       });
 
       if (!blog) {
@@ -45,10 +44,10 @@ const getCommentsBlogHandler = factory.createHandlers(
       }
 
       const [totalCommentsCount, comments] = await Promise.all([
-        prisma.comment.count({ where: { blogId } }),
+        prisma.comment.count({ where: { blogId, parentId: null } }),
 
         prisma.comment.findMany({
-          where: { blogId },
+          where: { blogId, parentId: null },
           take: limit,
           skip: offset,
           include: {
