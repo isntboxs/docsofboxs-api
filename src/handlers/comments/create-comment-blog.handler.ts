@@ -78,6 +78,8 @@ const createCommentBlogHandler = factory.createHandlers(
         authorId: newComment.authorId,
         blogId: newComment.blogId,
         content: newComment.content,
+        parentId: newComment.parentId,
+        depth: newComment.depth,
         author: {
           id: newComment.author.id,
           name: newComment.author.name,
