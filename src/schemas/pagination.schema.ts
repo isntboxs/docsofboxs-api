@@ -23,3 +23,20 @@ export const blogsPaginationSchema = z.object({
     .max(MAX_DEFAULT_PAGE)
     .default(MIN_DEFAULT_PAGE),
 });
+
+export const commentsPaginationSchema = z.object({
+  limit: z.coerce
+    .number()
+    .int()
+    .positive()
+    .min(MIN_DEFAULT_LIMIT)
+    .max(MAX_DEFAULT_LIMIT)
+    .default(MIN_DEFAULT_LIMIT),
+  page: z.coerce
+    .number()
+    .int()
+    .positive()
+    .min(MIN_DEFAULT_PAGE)
+    .max(MAX_DEFAULT_PAGE)
+    .default(MIN_DEFAULT_PAGE),
+});

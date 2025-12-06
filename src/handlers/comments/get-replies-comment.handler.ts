@@ -14,18 +14,18 @@ import { commentsPaginationSchema } from '@/schemas/pagination.schema';
 import type { PaginatedResponse } from '@/types/api-response';
 import type { Comment } from '@/types/comment';
 
-const getCommentsBlogHandler = factory.createHandlers(
+const getRepliesCommentHandler = factory.createHandlers(
   requireAuth,
   requireRole(['user', 'admin']),
   zValidator(
     'param',
     z.object({
-      blogId: z.uuid().nonempty({ error: 'Blog ID is required' }),
+      commentId: z.uuid().nonempty({ error: 'Comment ID is required' }),
     })
   ),
   zValidator('query', commentsPaginationSchema),
   async (c) => {
-    const { blogId } = c.req.valid('param');
+    const { commentId } = c.req.valid('param');
     const { page, limit } = c.req.valid('query');
     const offset = (page - 1) * limit;
 
@@ -33,22 +33,21 @@ const getCommentsBlogHandler = factory.createHandlers(
     const logger = c.get('logger');
 
     try {
-      const blog = await prisma.blog.findUnique({
-        where: { id: blogId },
-        select: { id: true, title: true },
+      const comment = await prisma.comment.findUnique({
+        where: { id: commentId },
       });
 
-      if (!blog) {
+      if (!comment) {
         throw new HTTPException(HttpStatusCodes.NOT_FOUND, {
-          message: 'Blog not found',
+          message: 'Comment not found',
         });
       }
 
-      const [totalCommentsCount, comments] = await Promise.all([
-        prisma.comment.count({ where: { blogId } }),
+      const [totalRepliesCount, comments] = await Promise.all([
+        prisma.comment.count({ where: { parentId: commentId } }),
 
         prisma.comment.findMany({
-          where: { blogId },
+          where: { parentId: commentId },
           take: limit,
           skip: offset,
           include: {
@@ -104,10 +103,10 @@ const getCommentsBlogHandler = factory.createHandlers(
           data: transformedComments,
           pagination: {
             limit,
-            page,
             offset,
-            totalItems: totalCommentsCount,
-            totalPages: Math.ceil(totalCommentsCount / limit),
+            page,
+            totalItems: totalRepliesCount,
+            totalPages: Math.ceil(totalRepliesCount / limit),
           },
         },
         HttpStatusCodes.OK
@@ -119,4 +118,4 @@ const getCommentsBlogHandler = factory.createHandlers(
   }
 );
 
-export default getCommentsBlogHandler;
+export default getRepliesCommentHandler;
