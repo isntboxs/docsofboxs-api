@@ -1,5 +1,6 @@
 import authRoute from '@/routes/auth.route';
 import blogsRoute from '@/routes/blogs.route';
+import likesRoute from '@/routes/likes.route';
 import rootRoute from '@/routes/root.route';
 
 import type { Hono } from 'hono';
@@ -12,4 +13,5 @@ export function registerRoutes(app: Hono<AppEnv, any, any>) {
   base.route('/', rootRoute);
   base.route('/auth', authRoute);
   base.route('/blogs', blogsRoute);
+  base.route('/likes', likesRoute);
 }
